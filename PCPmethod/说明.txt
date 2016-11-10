@@ -1,0 +1,1 @@
+PCPSP是指定mustlink和cannotlink来进行半监督学习的方法，最终获得每2个目标之间的相似性度量
