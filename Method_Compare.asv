@@ -93,4 +93,14 @@ X_out = mat2bolckmat( X_out_val_int, n_person_cum );
 
 
 
+im = imread('E:\人脸识别数据集\ChokePoint\cropped_face\P1E_cropped_face\P1E\P1E_S1_C1\0005\00000471.pgm');
+
+
+
+
+
+
+
+
+
 

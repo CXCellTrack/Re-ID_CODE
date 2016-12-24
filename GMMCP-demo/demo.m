@@ -6,7 +6,7 @@ clear, close all
 %% 1、生成数据
 % 仿照图1，生成4段数据，以平面上的点来表示
 rng(0)
-n = 35; r = 10;
+n = 30; r = 10;
 theta = linspace(0,360,n);
 data = [r*cosd(theta)', r*sind(theta)']; % 在一个圆周上生成一些数据
 noisy = (rand(n,2)*2-1)*2;
@@ -17,7 +17,8 @@ plot(data(:,1),data(:,2),'bo');hold on;
 line([-15,15],[0, 0],'color','r','linewidth',2);  line([0,0],[-15,15],'color','r','linewidth',2);
 
 % 将数据data 分入4个cluster中
-cluster = cell(4,1);
+n_c = 3;
+cluster = cell(n_c,1);
 for h=1:size(data,1)
     if data(h,1)>0 && data(h,2)>0 % 第1象限
         cluster{1} = [cluster{1}; data(h,:)];
@@ -26,39 +27,42 @@ for h=1:size(data,1)
     elseif data(h,1)<0 && data(h,2)<0 % 第3象限
         cluster{3} = [cluster{3}; data(h,:)];       
     elseif data(h,1)>0 && data(h,2)<0 % 第4象限
-        cluster{4} = [cluster{4}; data(h,:)];
+%         cluster{4} = [cluster{4}; data(h,:)];
+        data(h,1) = NaN;
     end
 end
 
+data = data(~isnan(data(:,1)),:);
+
 %% 2、加入哑节点
 n_nodes = zeros(size(cluster)); % 每个cluster中的节点数目
-for i=1:numel(cluster)
+for i=1:n_c
     n_nodes(i) = size(cluster{i},1);
 end
 % 每个cluster需要加入的哑节点数目的上界 Nd_ub
 Nd_ub = zeros(size(n_nodes));
 for i=1:numel(Nd_ub)
-    Nd_ub(i) = sum(n_nodes(1:i)) + sum(n_nodes(i:end));
+    Nd_ub(i) = sum(n_nodes(1:i-1)) + sum(n_nodes(i+1:end));
 end
 % 按照作者的说法，取1/3大小的上界就够用了
-% K = round(Nd_ub(1)/10) + n_nodes(1);
-K = max(n_nodes);
+K = round(Nd_ub(1)/3) + n_nodes(1);
+% K = max(n_nodes);
 % 将哑节点加入cluster中，为了便于计算权重，设其值为nan
-for i=1:numel(cluster)
+for i=1:n_c
     cluster{i} = [cluster{i}; nan*zeros(K-n_nodes(i),2)];
 end
 
 %% 3、计算边的权值
-weight = cell(4,4);
-for i1=1:3
-    for i2=i1+1:4
+weight = cell(n_c,n_c);
+for i1=1:n_c-1
+    for i2=i1+1:n_c
         weight{i1,i2} = zeros(K,K); 
     end
 end
 % weight{i1,i2}(j1,j2)为第i1个cluster中第j1个节点到第i2个cluster中第j2个节点权重
 
-for i1=1:3 % weight 为上三角阵
-    for i2=i1+1:4
+for i1=1:n_c-1 % weight 为上三角阵
+    for i2=i1+1:n_c
         for j1=1:K
             for j2=1:K
                 if isnan(cluster{i1}(j1,1)) || isnan(cluster{i2}(j2,1))
@@ -73,9 +77,9 @@ for i1=1:3 % weight 为上三角阵
 end
 
 %% 4、计算约束条件
-vars = cell(4,4);
-for i1=1:3
-    for i2=i1+1:4 % vars指的是边的变量（0、1代表是否连接上），论文中还有节点变量Vij，似乎不参与运作
+vars = cell(n_c,n_c);
+for i1=1:n_c-1
+    for i2=i1+1:n_c % vars指的是边的变量（0、1代表是否连接上），论文中还有节点变量Vij，似乎不参与运作
         vars{i1,i2} = binvar(K, K, 'full'); 
         vars{i2,i1} = vars{i1,i2}'; % 镜像复制
     end
@@ -84,8 +88,8 @@ end % 分配变量，每个变量对应一个权值
 % 计算约束条件1（每个cluster中节点的个数必须为k，这样才能最终形成k个clique，自动成立！）
 % 计算约束条件2（任意一个节点的有效边为h-1个，h为cluster个数）
 F2 = [];
-for i1=1:3 % weight 为上三角阵
-    for i2=i1+1:4
+for i1=1:n_c-1 % weight 为上三角阵
+    for i2=i1+1:n_c
         for j1=1:K
             F2 = [F2, sum(vars{i1,i2}(j1,:))==1, sum(vars{i1,i2}(:,j1))==1]; % i1中的j1必须连接到i2中的某一个
         end
@@ -95,10 +99,10 @@ end
 % 计算约束条件3（点a与点b连，点b与点c连，则a要与c连）
 F3 = [];
 tic
-for i1=1:4 % 非常非常非常慢 eij的总数目为 h*(h-1)/2*K^2 在这里为 6*14^2 = 1176
-    for i2=i1+1:4 % 每3个变量之间就有3个约束3，因此约束3条数为: C_h_2*(h-2)*K^3 = 6*2*14^3 = 32928
+for i1=1:n_c % 非常非常非常慢 eij的总数目为 h*(h-1)/2*K^2 在这里为 6*14^2 = 1176
+    for i2=i1+1:n_c % 每3个变量之间就有3个约束3，因此约束3条数为: C_h_2*(h-2)*K^3 = 6*2*14^3 = 32928
         % 因为是 i1和i2的和，因此2个没有必须都从1到4（否则会使约束数目翻倍，而结果并不变）
-        for i3=1:4 % i1和i2交换位置，其实是同一条约束（因此不妨规定i2>i1）
+        for i3=1:n_c % i1和i2交换位置，其实是同一条约束（因此不妨规定i2>i1）
             % 三个cluter必须不相同
             if i1==i2 || i2==i3 || i3==i1
                 continue;
@@ -133,22 +137,22 @@ for i1=1:4 % 非常非常非常慢 eij的总数目为 h*(h-1)/2*K^2 在这里为 6*14^2 = 1176
         end
     end
 end
-tic
+toc
 
 %% 5、计算目标函数并进行求解
 F = [F2, F3];
 OBJ = 0;
-for i1=1:3
-    for i2=i1+1:4
+for i1=1:n_c-1
+    for i2=i1+1:n_c
         OBJ = OBJ + sum(sum( vars{i1,i2}.*weight{i1,i2} ));
     end
 end
 
 % 求解BILP
-options = sdpsettings('verbose',0,'solver','gurobi');
+options = sdpsettings('verbose',0,'solver','cplex');
 sol = solvesdp( F, -OBJ, options )
-for i1=1:3
-    for i2=i1+1:4
+for i1=1:n_c-1
+    for i2=i1+1:n_c
         vars{i1,i2} = value(vars{i1,i2});   
     end
 end

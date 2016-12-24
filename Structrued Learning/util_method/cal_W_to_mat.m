@@ -1,4 +1,4 @@
-function [ W ] = cal_W( fe_to_use, n_person_in_seq )
+function [ W ] = cal_W_to_mat( fe_to_use, n_person_in_seq )
 
 
 %（W是代表2个点之间的相似度，那么肯定值越大相似度越高，则W为距离的反比）公式24

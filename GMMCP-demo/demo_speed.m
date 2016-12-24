@@ -6,7 +6,7 @@ clear, %close all
 %% 1、生成数据
 % 仿照图1，生成4段数据，以平面上的点来表示
 rng(0)
-n = 35; r = 10;
+n = 40; r = 10;
 theta = linspace(0,360,n);
 data = [r*cosd(theta)', r*sind(theta)']; % 在一个圆周上生成一些数据
 noisy = (rand(n,2)*2-1)*2;
@@ -17,7 +17,8 @@ plot(data(:,1),data(:,2),'bo');hold on;
 line([-15,15],[0, 0],'color','r','linewidth',2);  line([0,0],[-15,15],'color','r','linewidth',2);
 
 % 将数据data 分入4个cluster中
-cluster = cell(4,1);
+h_c = 3; % h_c 为cluster的个数
+cluster = cell(h_c,1);
 for h=1:size(data,1)
     if data(h,1)>0 && data(h,2)>0 % 第1象限
         cluster{1} = [cluster{1}; data(h,:)];
@@ -41,7 +42,6 @@ end
 % ADN的加入在建立整数规划的时候再体现!
 
 %% 3、计算边的权值
-h_c = 4; % h_c 为cluster的个数
 
 weight = cell(h_c,h_c);
 for i1=1:h_c-1
@@ -87,7 +87,7 @@ F1 = [];
 for i=1:h_c
     sum_in = 0;
     for j=1:h_c
-        sum_in = sum_in + sum(sum(vars{i,j}));
+        sum_in = sum_in + sum(sum(vars{j,i}));
     end
     F1 = [F1, sum_in + ADN(i) == (h_c-1)*max(n_nodes)];
 end
@@ -126,7 +126,7 @@ for i1=1:h_c-1 % 非常非常非常慢 eij的总数目为 h*(h-1)/2*K^2 在这里为 6*14^2 = 11
         end
     end
 end
-tic
+toc
 
 %% 5、计算目标函数并进行求解
 F = [F1, F2, F3];
@@ -140,7 +140,7 @@ OBJ = OBJ + Cd/2*sum(ADN); % 把ADN的值*权重也算上
 
 
 % 求解BILP
-options = sdpsettings('verbose',0,'solver','gurobi');
+options = sdpsettings('verbose',0,'solver','cplex');
 sol = solvesdp( F, -OBJ, options )
 for i1=1:h_c-1
     for i2=i1+1:h_c
@@ -185,9 +185,9 @@ for i1=1:4
         for j1=1:size(cluster{i1},1)
             j2 = find(vars{i1,i2}(j1,:));
             if isempty(j2) % i1中的j1与ADN相连
-%                 color_cluster{i1}(j1,:) = [0 0 0];
-%                 line([cluster{i1}(j1,1), ADN_xy(i2,1)],...
-%                     [cluster{i1}(j1,2), ADN_xy(i2,2)],'color',[0,0,0]);
+                color_cluster{i1}(j1,:) = [0 0 0];
+                line([cluster{i1}(j1,1), ADN_xy(i2,1)],...
+                    [cluster{i1}(j1,2), ADN_xy(i2,2)],'color',[0,0,0]);
             else
                 tc = color_cluster{i1}(j1,:);
                 color_cluster{i2}(j2,:) = tc;

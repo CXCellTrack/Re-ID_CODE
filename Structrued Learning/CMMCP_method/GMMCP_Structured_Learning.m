@@ -20,30 +20,34 @@ else
 end
 
 % 去掉非正面的脸
-feature = remove_non_front_face(feature, is_front);
+% feature = remove_non_front_face(feature, is_front);
+
+% 转换特征，进行4个场景下的匹配
+feature = convert_feature(feature);
+
 
 %% 2、特征合成
 
 % 合并好几个场景下的特征
-feature_train = {feature.P1E, feature.P1L};
+feature_train = {feature.seq1};
 f_train_final = make_f_train_final(feature_train);
 
 savename = 'cluster_centers-1000.mat';
-i_cam = 1;
+i_cam = 2;
 numClusters = 1000;
 if exist(savename, 'file')
     load(savename);
+    [ feature_in_1_cam_comb, ~ ] = feature_merge( f_train_final, i_cam, numClusters, cluster_centers );
 else
-    [ ~, cluster_centers ] = feature_merge( f_train_final, i_cam, numClusters );
+    [ feature_in_1_cam_comb, cluster_centers ] = feature_merge( f_train_final, i_cam, numClusters );
     save(savename, 'cluster_centers');
 end
 
-[ feature_in_1_cam_comb, ~ ] = feature_merge( f_train_final, i_cam, numClusters, cluster_centers );
 % 滤掉其中的nan，并获得人脸标签
 [ feature_in_1_cam_comb, labels ] = filter_nan_and_get_label( feature_in_1_cam_comb );
 % 每个seq中的人数
 n_p_all = cellfun(@(x) size(x,1), feature_in_1_cam_comb,'un',1)';
-% 设定要使用的seq数目
+% 设定要使用的seq数目（共4个）
 n_seq = 3;
 n_person_in_seq = n_p_all(1:n_seq); % 每个seq中人数
 n_person_cum = [0, cumsum(n_person_in_seq)]; % 人数的累加（用与矩阵分块）
@@ -62,8 +66,8 @@ end
     
 %% 获取gt的连接方式
 % 设置样本数目，规定样本切分方式
-N = 5;
-nn = cell(1,n_seq);
+N = 3;
+nn = cell(1,n_seq); % 每个样本中的人数
 nn_cum = cell(1,n_seq);
 for ii=1:n_seq
     % 将每个n_person_in_seq分为N段
@@ -109,7 +113,7 @@ end
 
 %% 分配变量空间，定义参数
 rng(0)
-iter = 200;
+iter = 100;
 w = zeros(size(N_phi_x_z{1}));
 W = cell(iter,1); % W 存放综合权值w
 Wavg = cell(iter,1);
@@ -132,12 +136,16 @@ sample_loss = zeros(iter,N); % 记录每一轮中样本损失函数均值
 Cd = 0;
 linesearch = 0; % 是否使用线搜索策略
 t = 0;
-random = 0;
+random = 1;
 ind = 0;
+
+n4gap = 1; % 每N*n4gap轮循环后计算下gap（n4gap>1）
+gap_loss = [];
+
+
 
 %% 开始循环
 while t<iter
-    
     %% 求解目标函数
     t = t + 1;
     tic;
@@ -150,11 +158,24 @@ while t<iter
         ind = ind + 1;
         ind(ind==(N+1)) = 1;
     end
-        
+       
     disp(['  选择样本 ', num2str(ind)]);
     % 怀疑速度慢是由dot(w,phi)引起？？？因此不使用这种形式，而临时计算<w,feature>，再组合为目标函数
     [ pre_connect, ADN_value, phi_x_zhat, delta_zstar_zhat ] = ...
         CXSL_cal_GMMCP_object( Wavg{t}, N_vars_ADN_F{ind}, Cd, N_phi_x_z{ind}, N_loss{ind} );
+    
+%     if mod(t,n4gap*N)==0 || t==1
+        disp('      计算一次全体样本的损失...');
+        loss = zeros(1,N);
+        for ii=1:N
+            [ ~, ~, ~, loss(ii) ] = ...
+                CXSL_cal_GMMCP_object( Wavg{t}, N_vars_ADN_F{ii}, Cd, N_phi_x_z{ii}, N_loss{ii} );
+        end
+        gap_loss = [gap_loss, mean(loss)];
+        fprintf('      全体样本平均损失函数gap_loss:\t%f\n', mean(loss));
+%     end
+        
+    
     
     %% 更新w过程
     disp('      更新权向量 w...'); 
@@ -198,11 +219,17 @@ end
 %% 后续处理
 % 绘制损失曲线
 aver_loss = sum(sample_loss,2);
-plot(aver_loss, '-*');
+figure; plot(aver_loss, '-*');
+figure; plot(gap_loss, '-o');
+xlabel('迭代次数（次）');
+ylabel('训练样本平均误差');
+
 fprintf('min loss = %f\n', min(aver_loss));
 t_best = find(aver_loss==min(aver_loss));
-t_best
+disp(t_best)
 w_best = Wavg{t_best};
+
+
 
 
 

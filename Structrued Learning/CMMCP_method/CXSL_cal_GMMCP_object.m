@@ -15,7 +15,7 @@ OBJ = dot(w, phi_x_z) + Cd/2*sum(ADN) + loss; % 把ADN的值*权重也算上
 
 % 求解BILP
 disp('    开始求解损失增强型预测问题...')
-options = sdpsettings('verbose', 0, 'solver', 'gurobi');
+options = sdpsettings('verbose', 0, 'solver', 'cplex');
 sol = solvesdp( F, -OBJ, options );
 % 输出得到的各个变量的值
 if sol.problem == 0      

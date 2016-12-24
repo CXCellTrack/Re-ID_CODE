@@ -37,7 +37,7 @@ for i=1:h_c
     for j=1:h_c
         sum_in = sum_in + sum(sum(vars{i,j}));
     end
-    F1 = [F1, sum_in + ADN(i) == (h_c-1)*max(n_nodes)];
+    F1 = [F1, sum_in + ADN(i) == (h_c-1)*(10+max(n_nodes))]; % 估计K值为 10+max(n_nodes)
 end
         
 % 计算约束条件2（任意一个节点的有效边为h-1个，h为cluster个数）在ADN版本中，改为<=1
@@ -63,7 +63,7 @@ for i1=1:h_c-1 % 非常非常非常慢 eij的总数目为 h*(h-1)/2*K^2 在这里为 6*14^2 = 11
             if i1==i2 || i2==i3 || i3==i1
                 continue;
             end
-            fprintf('计算 %d — %d — %d 的约束...\n', i1,i2,i3);
+            fprintf('计算 {%d} + {%d} <= 1 + {%d} 的约束...\n', i1,i2,i3);
             for j1=1:n_nodes(i1)
                 for j2=1:n_nodes(i2)
                     for j3=1:n_nodes(i3)
